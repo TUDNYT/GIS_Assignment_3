@@ -132,7 +132,7 @@ library(sf)
 # Convert SpatVector to sf object
 spain_prov_sf <- sf::st_as_sf(spain_prov)
 
-## Join the income data with the spatial data
+## Join the income data with the spatial data..
 
 spain_prov_income <- spain_prov_sf %>%
   left_join(prov_income, by = c("NAME_2" = "prov_name"))
