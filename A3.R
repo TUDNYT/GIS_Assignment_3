@@ -86,48 +86,61 @@ era5 <- wf_request(
 #####
 temp_tiff <- rast(here("data", "raw", "raster", "era5_temp_20200107.nc"))
 
-#plot the tiff file
-plot(temp_tiff)
 
-#Checking CRS of the tiff file and see whether it needs flipping along the y axis
-crs(temp_tiff)
+####Starts here to get the income data################################################
 
-plot(temp_tiff, main = "Temperature")
+####Read the income_municipalities csv file
+income_municipalities <- read_csv(here("data", "raw", "income_mun.csv"))
 
-popd_data <- here("data", "raw", "raster", "esp_pd_2020_1km.tif") %>%
-  rast()
-#Checking the CRS of the tiff file
-crs(popd_data)
-crs(popd_data) <- "EPSG:4326"
-plot(popd_data, main = "Population Density (2020)")
+##Libraries
+# Install if not already installed
+install.packages("ineAtlas")
 
-##Cropping for España
-spain <- ne_countries(scale = "medium", returnclass = "sf") %>%
-  filter(admin == "Spain")
-spain <- st_transform(spain, crs(popd_data))
-popd_data_spain <- crop(popd_data, spain)
-plot(popd_data_spain, main = "Population Density in Spain (2020)")
 
-plot(popd_data)
-plot(temp_tiff)
 
-##### Adding 
+library(ineAtlas)
+library(sf)
+# Function to get municipality georeferenced
+head(income_municipalities)
 
-gadm_spain <- geodata::gadm(country = "ESP", level = 1, path=tempdir())
+library(geodata)
 
-glimpse(gadm_spain)
-plot(gadm_spain["NAME_1"], main = "Spain: Admin Level 1")
+# Download GADM level 2: Spain Provinces
+spain_prov <- geodata::gadm(country = "ESP", level = 2, path = tempdir())
 
-#Box around india map
-box <- st_bbox(gadm_spain)
+# Quick check
+plot(spain_prov["NAME_2"], main = "Spain Provinces")
 
-## now we can use the crop function 
+library(dplyr)
 
-spain_temp <- crop(temp_tiff,gadm_spain)  
+# Filter to a single year (2020)
+income_2020 <- income_municipalities %>%
+  filter(year == 2020)
 
-spain_popd <- crop(popd_data,gadm_spain)  
-plot(spain_temp)
+# Aggregate mean income by province
+prov_income <- income_2020 %>%
+  group_by(prov_name) %>%
+  summarise(mean_income = mean(net_income_pc, na.rm = TRUE))
 
-plot(spain_popd)
+# Check
+head(prov_income)
 
-     
+unique(spain_prov$NAME_2)
+unique(prov_income$prov_name)
+library(sf)
+
+# Convert SpatVector to sf object
+spain_prov_sf <- sf::st_as_sf(spain_prov)
+
+## Join the income data with the spatial data
+
+spain_prov_income <- spain_prov_sf %>%
+  left_join(prov_income, by = c("NAME_2" = "prov_name"))
+##Map
+library(tmap)
+
+tm_shape(spain_prov_income) +
+  tm_fill("mean_income", palette = "YlGnBu", title = "Mean Income (€)") +
+  tm_borders() +
+  tm_layout(title = "Average Provincial Income in Spain (2020)")
+
