@@ -26,9 +26,10 @@ pacman::p_load(
   osrm ,
   here,
   terra,
-  tidyr
+  tidyr,
+  tmap
 )
-here::i_am("A3.R")
+here::i_am("A3_map.R")
 
 
 
@@ -84,48 +85,75 @@ era5 <- wf_request(
 )
 
 #####
+
+# Load the temperature raster
 temp_tiff <- rast(here("data", "raw", "raster", "era5_temp_20200107.nc"))
 
-#plot the tiff file
-plot(temp_tiff)
+# Reproject temp_tiff to EPSG:4326
+temp_tiff_4326 <- project(temp_tiff, crs("EPSG:4326"))
 
-#Checking CRS of the tiff file and see whether it needs flipping along the y axis
-crs(temp_tiff)
+# Load the population density raster
+popd_data <- rast(here("data", "raw", "raster", "esp_pd_2020_1km.tif"))
 
-plot(temp_tiff, main = "Temperature")
+# Ensure popd_data is in EPSG:4326
+if (crs(popd_data) != "EPSG:4326") {
+  popd_data <- project(popd_data, crs("EPSG:4326"))
+}
 
-popd_data <- here("data", "raw", "raster", "esp_pd_2020_1km.tif") %>%
-  rast()
-#Checking the CRS of the tiff file
-crs(popd_data)
-crs(popd_data) <- "EPSG:4326"
-plot(popd_data, main = "Population Density (2020)")
-
-##Cropping for España
+## Cropping for España
 spain <- ne_countries(scale = "medium", returnclass = "sf") %>%
   filter(admin == "Spain")
-spain <- st_transform(spain, crs(popd_data))
+spain <- st_transform(spain, crs("EPSG:4326"))
+
+# Crop the rasters
 popd_data_spain <- crop(popd_data, spain)
-plot(popd_data_spain, main = "Population Density in Spain (2020)")
+temp_spain <- crop(temp_tiff_4326, spain)
 
-plot(popd_data)
-plot(temp_tiff)
+# Load GADM data for Spain
+gadm_spain <- geodata::gadm(country = "ESP", level = 2, path=tempdir())
+gadm_spain <- st_as_sf(gadm_spain)  # Convert to sf object
+gadm_spain <- st_transform(gadm_spain, crs("EPSG:4326"))
 
-##### Adding 
+#### Masking the data
 
-gadm_spain <- geodata::gadm(country = "ESP", level = 1, path=tempdir())
+# Mask the temperature raster with GADM
+spain_temp_mask <- mask(temp_spain, gadm_spain)
+# Mask the population density raster with GADM
+spain_popd_mask <- mask(popd_data_spain, gadm_spain)
 
-glimpse(gadm_spain)
-plot(gadm_spain["NAME_1"], main = "Spain: Admin Level 1")
+plot(spain_temp_mask, main = "Masked Temperature in Spain")
+plot(spain_popd_mask, main = "Masked Population Density in Spain")
 
-#Box around india map
-box <- st_bbox(gadm_spain)
+#### Resolution
 
-## now we can use the crop function 
+# Comparing the the resolution of the rasters
+res(spain_temp_mask)
+res(spain_popd_mask)
 
-spain_temp <- crop(temp_tiff,gadm_spain)  
+# Resampling the data to match the resolution of the temperature data
+spain_popd_resampled <- resample(spain_popd_mask, spain_temp_mask, method = "bilinear")
 
-spain_popd <- crop(popd_data,gadm_spain)  
-plot(spain_temp)
+plot(spain_popd_resampled, main = "Resampled Population Density")
+res(spain_popd_resampled) # Verify the new resolution
+res(spain_temp_mask) # Verify the temperature resolution
 
-plot(spain_popd)
+#### Plotting the data better 
+
+# Load Spanish provinces (using GADM)
+gadm_spain <- geodata::gadm(country = "ESP", level = 2, path=tempdir())
+gadm_spain <- st_as_sf(gadm_spain)  # Convert to sf object
+gadm_spain <- st_transform(gadm_spain, crs("EPSG:4326"))
+
+
+plot(gadm_spain["NAME_1"], main = "Spain: Admin Level 2 (Provinces)")
+
+# check the number of provinces in the gadm_spain to see it matches up with our vector file provinces too 
+
+n_provinces <- nrow(gadm_spain)
+cat("Number of provinces in Spain:", n_provinces, "\n")
+
+# list the n_provinces
+cat("Provinces in Spain:\n")
+print(gadm_spain$NAME_1)
+
+
