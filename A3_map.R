@@ -129,5 +129,3 @@ spain_popd <- crop(popd_data,gadm_spain)
 plot(spain_temp)
 
 plot(spain_popd)
-
-     
