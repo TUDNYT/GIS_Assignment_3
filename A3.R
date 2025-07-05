@@ -188,9 +188,70 @@ geom_point(color = "darkblue", size = 3) +
   labs(title = "Income vs Temperature in Spain",
        x = "Mean Temperature (°C)",
        y = "Mean Income (€)")
+
+###Dropping NA values
+spain_prov_income <- spain_prov_income %>%
+  filter(!is.na(mean_income) & !is.na(mean_temp))
 ###Simple linear regression model
 Regression  <- lm(mean_income ~ mean_temp, data = spain_prov_income)
 # Display regression in a table
 stargazer(Regression, type = "text", title = "Regression: Income vs Temperature")
 # Display regression summary
 summary(Regression)
+
+
+
+
+##################################################
+###WE also have the Population density 
+
+# Load the population density raster
+popd_data <- rast(here("data", "raw", "raster", "esp_pd_2020_1km.tif"))
+# Ensure popd_data is in EPSG:4326
+if (crs(popd_data) != "EPSG:4326") {
+  popd_data <- project(popd_data, crs("EPSG:4326"))
+}
+
+## Cropping for España
+spain <- ne_countries(scale = "medium", returnclass = "sf") %>%
+  filter(admin == "Spain")
+spain <- st_transform(spain, crs("EPSG:4326"))
+
+
+# Crop and mask population density raster to Spain
+popd_spain <- crop(popd_data, vect(spain))
+popd_spain <- mask(popd_spain, vect(spain))
+
+# Plot to check
+plot(popd_spain, main = "Population Density in Spain (2020)")
+
+
+
+# Add mean population density to province dataset
+spain_prov_income$mean_popd <- exact_extract(
+  popd_spain, spain_prov_income, "mean"
+)
+
+# Check
+head(spain_prov_income[, c("NAME_2", "mean_income", "mean_temp", "mean_popd")])
+
+
+###Now each province has mean income, mean temperature, and mean population density.
+
+##Dropping NA values
+spain_prov_income <- spain_prov_income %>%
+  filter(!is.na(mean_income) & !is.na(mean_temp) & !is.na(mean_popd))
+
+####Running a linear regression model, with population density as a control variable
+Regression_pop <- lm(mean_income ~ mean_temp + mean_popd, data = spain_prov_income)
+
+
+# Display regression in a table
+stargazer(Regression_pop, type = "text", title = "Multiple Regression: Income vs Temperature and Population Density")
+# Display the two regression summaries in a table
+stargazer(Regression, Regression_pop, type = "text", 
+          title = "Comparing Simple OLS and OLS with POP Control",
+          column.labels = c("Simple OLS", "Control for Population Density"),
+          dep.var.labels = "Mean Income (€)",
+          covariate.labels = c("Mean Temperature (°C)", "Mean Population Density (people/km²)"),
+          model.numbers = FALSE)
