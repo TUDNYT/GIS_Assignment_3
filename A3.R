@@ -83,7 +83,7 @@ era5 <- wf_request(
   path     = getwd()
 )
 
-#####
+######
 temp_tiff <- rast(here("data", "raw", "raster", "era5_temp_20200107.nc"))
 
 
