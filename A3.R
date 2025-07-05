@@ -4,7 +4,7 @@ library(pacman)
 
 pacman::p_load(
   httr,
-  jsonlite,exactextractr,stargazer,modelsummary,
+  jsonlite,exactextractr,stargazer,
   ggplot2,
   keyring,
   ecmwfr,
