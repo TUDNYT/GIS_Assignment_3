@@ -1,3 +1,9 @@
+knitr::opts_chunk$set(
+  echo = FALSE,      # hides code
+  warning = FALSE,   # hides warnings
+  message = FALSE    # hides messages
+)
+
 #### Setup 
 
 library(pacman)
