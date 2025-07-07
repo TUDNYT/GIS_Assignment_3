@@ -1,5 +1,23 @@
-#### Setup 
+---
+title: "Analysis of Income, Temperature, and Population Density in Spain 2020"
+author: "Nykol Armacanqui and Labanya Paul"
+date: "`r Sys.Date()`"
+output:
+  html_document:
+    toc: true
+    toc_float: true
+    theme: united
+---
 
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+```
+
+### Setup
+
+This section loads all necessary libraries and sets up the environment for the analysis.
+
+```{r load-libraries}
 library(pacman)
 
 pacman::p_load(
@@ -30,11 +48,15 @@ pacman::p_load(
   ineAtlas,
   tmap
 )
-here::i_am("A3.R")  
+here::i_am("assignment_3.Rmd")  
+```
 
-#### Set up 
+### API and Data Configuration
+
+Here, we configure the download folder and set up the API key for the Copernicus Climate Data Store (CDS) to download temperature data.
+
+```{r api-setup}
 # download folder setup
-
 download_folder <- here("data", "raw", "raster")
 
 # Make sure the folder exists
@@ -48,7 +70,6 @@ key_set_with_value(
 )
 
 # now pull it back out:
-
 cds_api_key <- key_get(
   service  = "cds",
   username = "nykol_yove.armacanqui_martinez_de_tudor@mailbox.tu-dresden.de"
@@ -56,7 +77,6 @@ cds_api_key <- key_get(
 
 
 # Export to environment variables for cdsapi, reticulate, or ecmwfr
-
 Sys.setenv(
   CDSAPI_URL = "https://cds.climate.copernicus.eu/api",
   CDSAPI_KEY = cds_api_key
@@ -69,10 +89,15 @@ wf_set_key(
 
 
 # if you ever want to remember your API key 
-
-
 wf_get_key()
+```
 
+### Data Download: ERA5 Temperature
+
+
+```{r download-era5, eval=FALSE}
+# This chunk is set to eval=FALSE to prevent re-downloading the data on every run.
+# Set to TRUE if you need to download the data for the first time.
 request <- list(
   dataset_short_name = "reanalysis-era5-single-levels",
   product_type       = "reanalysis",
@@ -91,9 +116,13 @@ era5 <- wf_request(
   transfer = TRUE,
   path     = download_folder
 )
+```
 
-###Getting the Income Data...
-####################################################### Vector
+### Vector Data: Provincial Income
+
+We will now load and process the income data. This involves reading a CSV file, aggregating municipal income to the provincial level, and joining it with spatial data for Spain's provinces.
+
+```{r process-income-data}
 
 #income_municipalities csv file
 income_municipalities <- read_csv(here("data", "raw", "vector", "income_mun.csv"))
@@ -122,6 +151,13 @@ unique(prov_income$prov_name)
 
 # Convert SpatVector to sf object
 spain_prov_sf <- sf::st_as_sf(spain_prov)
+```
+
+### Joining Spatial and Income Data
+
+Now we join the aggregated income data with the provincial boundaries.
+
+```{r join-income-spatial}
 
 # Load GADM data for Spain
 gadm_spain <- geodata::gadm(country = "ESP", level = 2, path=tempdir())
@@ -133,6 +169,13 @@ gadm_spain <- st_transform(gadm_spain, crs("EPSG:4326"))
 
 spain_prov_income <- gadm_spain %>%
   left_join(prov_income, by = c("NAME_2" = "prov_name"))
+```
+
+### Map 1: Average Provincial Income
+
+This map visualizes the average net income per capita for each province in Spain for the year 2020.
+
+```{r map-income}
 
 tm_shape(spain_prov_income) +
   tm_fill(
@@ -142,6 +185,13 @@ tm_shape(spain_prov_income) +
   ) +
   tm_borders(col = "black", lwd = 0.5) +
   tm_title("Average Provincial Income in Spain (2020)")
+```
+
+### Raster Data: Processing Temperature
+
+Next, we load the downloaded temperature data, reproject it to match our vector data's CRS, and join it to the boundaries of Spain.
+
+```{r process-temperature-raster}
 
 #Getting temperature data from copernicus
 
@@ -157,7 +207,13 @@ temp_spain <- mask(temp_spain, spain_prov_sf)
 
 # Plot to check
 plot(temp_spain, main = "Temperature in Spain (July 1, 2020 at 15:00)")
+```
 
+### Extracting Temperature and Filtering Data
+
+We extract the mean temperature for each province and then filter the dataset to include only mainland Spain, removing the Canary Islands.
+
+```{r extract-temp-and-filter}
 # mean temperature per province
 spain_prov_income$mean_temp <- exact_extract(temp_spain, spain_prov_income, "mean")
 
@@ -168,7 +224,13 @@ head(spain_prov_income[, c("NAME_2", "mean_income", "mean_temp")])
 
 spain_prov_income <- spain_prov_income %>%
   filter(NAME_1 != "Islas Canarias")
+```
 
+### Map 2: Average Provincial Temperature
+
+This map shows the average temperature across mainland Spanish provinces. 
+
+```{r map-temperature}
 # Plotting the temperature data 
 tm_shape(spain_prov_income) +
   tm_fill(
@@ -178,16 +240,24 @@ tm_shape(spain_prov_income) +
   ) +
   tm_borders() +
   tm_title("Average Provincial Temperature in Spain in 2020 (Mainland Spain)")
+```
 
+### Analysis 1: Simple Linear Regression (Income vs. Temperature)
+
+We first look at the relationship between income and temperature with a scatterplot and then run a simple linear regression.
+
+```{r scatterplot-income-temp}
 ##Scatterplot the relationship between income and temperature
 
 ggplot(spain_prov_income, aes(x = mean_temp, y = mean_income)) +
-  geom_point(color = "darkblue", size = 3) +
+geom_point(color = "darkblue", size = 3) +
   geom_smooth(method = "lm", se = FALSE, color = "red") +
   labs(title = "Income vs Temperature in Spain",
        x = "Mean Temperature (°C)",
        y = "Mean Income (€)")
+```
 
+```{r simple-regression}
 #Dropping NA values
 spain_prov_income <- spain_prov_income %>%
   filter(!is.na(mean_income) & !is.na(mean_temp))
@@ -198,8 +268,14 @@ Regression  <- lm(mean_income ~ mean_temp, data = spain_prov_income)
 stargazer(Regression, type = "text", title = "Regression: Income vs Temperature")
 # Display regression summary
 summary(Regression)
+```
 
-###################################################### Raster
+### Raster Data: Processing Population Density
+
+To improve our model, we introduce population density as a control variable. We load, process, and log transform the population density data.
+
+```{r process-population-raster}
+####################################################### Raster
 #### We also have the Population density 
 
 # Loading the population density raster
@@ -228,7 +304,13 @@ popd_spain <- log(popd_spain + 1)  # Adding 1 to avoid log(0)
 
 plot(popd_spain, main = "Log Population Density in Spain (2020)",
      xlim = c(-10, 5), ylim = c(35, 45))
+```
 
+### Extracting Population Density and Finalizing Data
+
+We extract the mean population density for each province and clean the dataset of any remaining NA values.
+
+```{r extract-popd}
 # mean population density to province dataset
 spain_prov_income$mean_popd <- exact_extract(
   popd_spain, spain_prov_income, "mean"
@@ -242,7 +324,13 @@ head(spain_prov_income[, c("NAME_2", "mean_income", "mean_temp", "mean_popd")])
 # Dropping NA values
 spain_prov_income <- spain_prov_income %>%
   filter(!is.na(mean_income) & !is.na(mean_temp) & !is.na(mean_popd))
+```
 
+### Analysis 2: Simple Linear Regression (Income vs. Population Density)
+
+A scatterplot helps show the relationship between provincial income and population density.
+
+```{r scatterplot-income-popd}
 # plot (line) population density and mean income
 
 ggplot(spain_prov_income, aes(x = mean_popd, y = mean_income)) +
@@ -252,7 +340,13 @@ ggplot(spain_prov_income, aes(x = mean_popd, y = mean_income)) +
        x = "Mean Population Density (log scale)",
        y = "Mean Income (€)") +
   scale_x_log10()  
+```
 
+### Preparing Data for Final Maps
+
+We create new columns to label income and identify the top 3 richest and bottom 3 poorest provinces.
+
+```{r prep-map-labels}
 # top 3 provinces by income
 spain_prov_income <- spain_prov_income %>%
   mutate(
@@ -269,7 +363,13 @@ spain_prov_income <- spain_prov_income %>%
 
 # Check bottom 3 provinces
 spain_prov_income %>% filter(bottom3)
+```
 
+### Map 3: Population Density and Income
+
+This map overlays mean income labels on population density. The top 3 richest provinces are highlighted in bold red.
+
+```{r map-popd-income}
 tm_shape(spain_prov_income) +
   tm_fill(
     fill = "mean_popd",
@@ -289,8 +389,14 @@ tm_shape(spain_prov_income) +
     legend.title.size = 0.5,   
     legend.text.size = 0.5     
   )
+```
 
-########
+### Map 4: Temperature and Income
+
+This map overlays mean income labels on mean temperature. The top 3 richest provinces are highlighted in blue, and the bottom 3 are in green.
+
+```{r map-temp-income}
+
 tm_shape(spain_prov_income) +
   tm_fill(
     fill = "mean_temp",
@@ -313,6 +419,13 @@ tm_shape(spain_prov_income) +
     legend.text.size = 0.5     
   )		
 
+```
+
+### Analysis 2: Multiple Linear Regression
+
+Finally, we run a multiple linear regression model to assess the relationship between income and temperature while controlling for population density. We then compare this model to our earlier simple regression.
+
+```{r multiple-regression}
 ####Running a linear regression model, with population density as a control variable
 Regression_pop <- lm(mean_income ~ mean_temp + mean_popd, data = spain_prov_income)
 
@@ -326,4 +439,4 @@ stargazer(Regression, Regression_pop, type = "text",
           dep.var.labels = "Mean Income (€)",
           covariate.labels = c("Mean Temperature (°C)", "Mean Population Density (people/km²)"),
           model.numbers = FALSE)
-
+```
