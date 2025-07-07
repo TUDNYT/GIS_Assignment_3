@@ -10,7 +10,11 @@ output:
 ---
 
 ```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE, message = FALSE, warning = FALSE)
+knitr::opts_chunk$set(
+  echo = FALSE,      # hides code
+  warning = FALSE,   # hides warnings
+  message = FALSE    # hides messages
+)
 ```
 
 ### Setup
@@ -420,6 +424,17 @@ tm_shape(spain_prov_income) +
   )		
 
 ```
+######Analysis 1: Simple Linear Regression
+Dependent variable-Income
+Independent variable-Temperature
+```{r}
+# regression
+Regression  <- lm(mean_income ~ mean_temp, data = spain_prov_income)
+
+# Display regression in a table
+stargazer(Regression, type = "text", title = "Regression: Income vs Temperature")
+```
+
 
 ### Analysis 2: Multiple Linear Regression
 
@@ -439,4 +454,7 @@ stargazer(Regression, Regression_pop, type = "text",
           dep.var.labels = "Mean Income (€)",
           covariate.labels = c("Mean Temperature (°C)", "Mean Population Density (people/km²)"),
           model.numbers = FALSE)
+```
+```{r}
+
 ```
