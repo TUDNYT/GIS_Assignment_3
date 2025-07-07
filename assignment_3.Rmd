@@ -424,16 +424,7 @@ tm_shape(spain_prov_income) +
   )		
 
 ```
-######Analysis 1: Simple Linear Regression
-Dependent variable-Income
-Independent variable-Temperature
-```{r}
-# regression
-Regression  <- lm(mean_income ~ mean_temp, data = spain_prov_income)
 
-# Display regression in a table
-stargazer(Regression, type = "text", title = "Regression: Income vs Temperature")
-```
 
 
 ### Analysis 2: Multiple Linear Regression
